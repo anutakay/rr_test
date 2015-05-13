@@ -55,7 +55,7 @@ public class SimpleWEBServer extends Thread {
             	if(path == null) {
             		response = this.createBadRequestResponse();
             	} else {
-            		response = this.createOKResponse();
+            		response = this.createOKResponse(path);
             	}
                 output.write(response.getBytes());
                 socket.close();
@@ -115,7 +115,7 @@ public class SimpleWEBServer extends Thread {
         return (str.substring(s, e)).trim();
     }
 	
-	private String createOKResponse() {
+	private String createOKResponse(String msg) {
 		String response = "HTTP/1.1 200 OK\n";    
         DateFormat df = DateFormat.getTimeInstance();
         df.setTimeZone(TimeZone.getTimeZone("GMT"));
@@ -127,6 +127,7 @@ public class SimpleWEBServer extends Thread {
         		+ "Connection: close\n"
         		+ "Server: SimpleWEBServer\n"
         		+ "Pragma: no-cache\n\n";
+        response = response + msg;
         return response;
 	}
 
