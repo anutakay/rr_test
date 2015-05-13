@@ -1,5 +1,7 @@
 package rosrabota_test;
 
+import java.io.File;
+import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -54,12 +56,30 @@ public class SimpleWEBServer extends Thread {
             	String response = null;
             	if(path == null) {
             		response = this.createBadRequestResponse();
+            		output.write(response.getBytes());
+                    socket.close();
+                    return;
+            	} else if (path.equals("")) {
+            		response = this.createSimpleResponse("<img src=\"http://localhost:8080/banner/1\" />");
+            		output.write(response.getBytes());
+                    socket.close();
+                    return;
             	} else {
-            		response = this.createOKResponse(path);
+            		String filepath =  "b1.gif";
+            		File file = new File(filepath);
+            		response = this.createImageResponseHead(file);
+            		output.write(response.getBytes());
+            		FileInputStream fis = new FileInputStream(file);
+            		size = 1;
+                    while(size > 0)
+                    {
+                    	size = fis.read(buf);
+                        if(size > 0) output.write(buf, 0, size);
+                    }
+                    fis.close();
+                    socket.close();
             	}
-                output.write(response.getBytes());
-                socket.close();
-                return;
+                
             }     
 		} catch (IOException e) {
 			// TODO Auto-generated catch block
@@ -81,10 +101,9 @@ public class SimpleWEBServer extends Thread {
             URI = URI.substring(7);
             URI = URI.substring(URI.indexOf("/", 0));
         } else if(path.indexOf("/", 0) == 0) {
-            URI = URI.substring(1); // если URI начинается с символа /, удаляем его
+            URI = URI.substring(1); 
         }
 
-        // отсекаем из URI часть запроса, идущего после символов ? и #
         int i = URI.indexOf("?");
         if(i > 0) {
         	URI = URI.substring(0, i);
@@ -115,9 +134,26 @@ public class SimpleWEBServer extends Thread {
         return (str.substring(s, e)).trim();
     }
 	
-	private String createOKResponse(String msg) {
-		String response = "HTTP/1.1 200 OK\n";    
+	private String createImageResponseHead(File file) {
+        String response = "HTTP/1.1 200 OK\n";
         DateFormat df = DateFormat.getTimeInstance();
+        df.setTimeZone(TimeZone.getTimeZone("GMT"));
+        response = response + "Last-Modified: " + df.format(new Date(file.lastModified())) + "\n";
+        response = response + "Content-Length: " + file.length() + "\n";
+
+        // строка с MIME кодировкой
+        response = response + "Content-Type: " + "image/gif" + "\n";
+
+        // остальные заголовки
+        response = response
+        + "Connection: close\n"
+        + "Server: SimpleWEBServer\n\n";
+        return response;
+	}
+	
+	private String createSimpleResponse() {
+		String response = "HTTP/1.1 200 OK\n";
+		DateFormat df = DateFormat.getTimeInstance();
         df.setTimeZone(TimeZone.getTimeZone("GMT"));
         response = response 
         		+ "Date: " 
@@ -127,7 +163,12 @@ public class SimpleWEBServer extends Thread {
         		+ "Connection: close\n"
         		+ "Server: SimpleWEBServer\n"
         		+ "Pragma: no-cache\n\n";
-        response = response + msg;
+        return response;
+	}
+	
+	
+	private String createSimpleResponse(String msg) {
+		String response = createSimpleResponse() + msg;
         return response;
 	}
 
