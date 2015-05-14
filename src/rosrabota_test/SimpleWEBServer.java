@@ -2,6 +2,7 @@ package rosrabota_test;
 
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -10,9 +11,27 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.text.DateFormat;
 import java.util.Date;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.TimeZone;
+import java.util.function.Consumer;
+
+import java.util.regex.Matcher;  
+import java.util.regex.Pattern; 
 
 public class SimpleWEBServer extends Thread {
+	
+	private static Map<String, String> bannerMap = new HashMap<String,String>();
+	
+	private static Map<String, Consumer<String>> routeMap = new HashMap<String, Consumer<String>>();
+	
+	static {
+		bannerMap.put("1", "b1.gif");
+		bannerMap.put("2", "b2.gif");
+		bannerMap.put("3", "b3.gif");
+		
+		routeMap.put("^stats$", (String id) -> System.out.print("Вывод статистики"));
+	}
 	
 	private static int PORT = 8080;
 	
@@ -26,6 +45,7 @@ public class SimpleWEBServer extends Thread {
 	}
 
 	public static void main(final String... args) {
+		
 		ServerSocket server;
 		try {
 			server = new ServerSocket(PORT, 0, InetAddress.getByName("localhost"));
@@ -46,46 +66,66 @@ public class SimpleWEBServer extends Thread {
 			OutputStream output = socket.getOutputStream();
 			
 			byte buf[] = new byte[64*1024];
-            int size = input.read(buf);
-            
+            int size = input.read(buf);  
             String request = new String(buf, 0, size);
             String path = getPath(request);
-            System.out.println("path: " + path);
-            
-            {
-            	String response = null;
-            	if(path == null) {
-            		response = this.createBadRequestResponse();
-            		output.write(response.getBytes());
-                    socket.close();
-                    return;
-            	} else if (path.equals("")) {
-            		response = this.createSimpleResponse("<img src=\"http://localhost:8080/banner/1\" />");
-            		output.write(response.getBytes());
-                    socket.close();
-                    return;
-            	} else {
-            		String filepath =  "b1.gif";
-            		File file = new File(filepath);
-            		response = this.createImageResponseHead(file);
-            		output.write(response.getBytes());
-            		FileInputStream fis = new FileInputStream(file);
-            		size = 1;
-                    while(size > 0)
-                    {
-                    	size = fis.read(buf);
-                        if(size > 0) output.write(buf, 0, size);
-                    }
-                    fis.close();
-                    socket.close();
-            	}
-                
-            }     
+                    
+            route1(output, path);
+    		socket.close();     
 		} catch (IOException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
 	}
+	
+	private void route(OutputStream output, String path) throws IOException {
+		
+		routeMap.forEach((k, v) -> { 
+			if(test(k, path)) {
+				v.accept(path);
+			}
+		});
+	}
+	
+	public static boolean test(String regex, String testString){  
+        Pattern p = Pattern.compile(regex);  
+        Matcher m = p.matcher(testString);  
+        return m.matches(); 
+    }
+
+	private void route1(OutputStream output, String path)
+			throws IOException, FileNotFoundException {
+		System.out.println("path: " + path);
+		if(path == null) {
+			sendBadRequestResponse(output);
+		} else if (path.equals("")) {
+			String str = "<img src=\"http://localhost:8080/banner/1\" vspace=\"10\"/>"
+					+ "<img src=\"http://localhost:8080/banner/2\" vspace=\"10\"/>"
+					+ "<img src=\"http://localhost:8080/banner/3\" vspace=\"10\"/>";
+			sendSimpleResponse(output, str);
+		} else {
+			sendImageResponse(output);
+		}
+	}
+
+	private void sendImageResponse(OutputStream output) throws IOException,
+			FileNotFoundException {
+		String response;
+		File file = new File("b1.gif");
+		response = this.createImageResponseHead(file);
+		output.write(response.getBytes());
+		FileInputStream fis = new FileInputStream(file);
+		int size = 1;
+		byte buf[] = new byte[64*1024]; 
+		while(size > 0)
+		{
+			size = fis.read(buf);
+		    if(size > 0) output.write(buf, 0, size);
+		}
+		fis.close();
+	}
+	
+	
 	
 	private String getPath(final String request) {
 		String path, URI = extract(request, "GET ", " ");
@@ -166,13 +206,12 @@ public class SimpleWEBServer extends Thread {
         return response;
 	}
 	
-	
-	private String createSimpleResponse(String msg) {
+	private void sendSimpleResponse(OutputStream output, String msg) throws IOException {
 		String response = createSimpleResponse() + msg;
-        return response;
+		output.write(response.getBytes());  
 	}
 
-	private String createBadRequestResponse() {
+	private void sendBadRequestResponse(OutputStream output) throws IOException {
 		String response = "HTTP/1.1 400 Bad Request\n";    
         DateFormat df = DateFormat.getTimeInstance();
         df.setTimeZone(TimeZone.getTimeZone("GMT"));
@@ -184,7 +223,7 @@ public class SimpleWEBServer extends Thread {
         		+ "Connection: close\n"
         		+ "Server: SimpleWEBServer\n"
         		+ "Pragma: no-cache\n\n";
-        return response;
+        output.write(response.getBytes());      
 	}
 
 }
