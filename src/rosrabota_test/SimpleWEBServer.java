@@ -10,12 +10,13 @@ import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.text.DateFormat;
+import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.NoSuchElementException;
 import java.util.TimeZone;
-import java.util.function.Consumer;
-
 import java.util.regex.Matcher;  
 import java.util.regex.Pattern; 
 
@@ -23,27 +24,25 @@ public class SimpleWEBServer extends Thread {
 	
 	private static Map<String, String> bannerMap = new HashMap<String,String>();
 	
-	private static Map<String, Consumer<String>> routeMap = new HashMap<String, Consumer<String>>();
+	private List<Route> routeList = new ArrayList<Route>();
+	
+	@FunctionalInterface
+	public interface WorkerInterface {
+		
+	    public void sendResponse(OutputStream out, String msg);
+	 
+	}
 	
 	static {
 		bannerMap.put("1", "b1.gif");
 		bannerMap.put("2", "b2.gif");
-		bannerMap.put("3", "b3.gif");
-		
-		routeMap.put("^stats$", (String id) -> System.out.print("Вывод статистики"));
+		bannerMap.put("3", "b3.gif");	
 	}
 	
 	private static int PORT = 8080;
 	
 	Socket socket;
 	
-	public SimpleWEBServer(final Socket socket) {
-		this.socket = socket;
-		setDaemon(true);
-        setPriority(NORM_PRIORITY);
-        start();
-	}
-
 	public static void main(final String... args) {
 		
 		ServerSocket server;
@@ -60,6 +59,42 @@ public class SimpleWEBServer extends Thread {
 		}
 	}
 	
+	public SimpleWEBServer(final Socket socket) {
+		addRoutes();
+	
+		this.socket = socket;
+		setDaemon(true);
+        setPriority(NORM_PRIORITY);
+        start();
+	}
+
+	private void addRoutes() {
+		addRoute("^stats$", (OutputStream out, String path) -> sendSimpleResponse(out, "Вывод статистики"));
+		addRoute("^main$", (OutputStream out, String path) -> {
+			String str = "<img src=\"http://localhost:8080/banner/1\" vspace=\"10\"/>"
+					+ "<img src=\"http://localhost:8080/banner/2\" vspace=\"10\"/>"
+					+ "<img src=\"http://localhost:8080/banner/3\" vspace=\"10\"/>";
+			sendSimpleResponse(out, str);
+		});
+		addRoute("^banner/[a-z0-9_-]+$", (OutputStream out, String path) -> sendImageResponse(out));
+	}
+
+	private void addRoute(final String regex, final WorkerInterface function) {		
+		routeList.add(new Route(regex, function));
+	}
+	
+	private class Route {
+		
+		String regex;
+		
+		WorkerInterface function;
+		
+		public Route(String regex, WorkerInterface function) {
+			this.regex = regex;
+			this.function = function;
+		}
+	};
+
 	public void run() {
 		try { 
 			InputStream input = socket.getInputStream();
@@ -69,9 +104,10 @@ public class SimpleWEBServer extends Thread {
             int size = input.read(buf);  
             String request = new String(buf, 0, size);
             String path = getPath(request);
-                    
-            route1(output, path);
-    		socket.close();     
+                                
+            route(output, path);
+    		socket.close(); 
+    		
 		} catch (IOException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
@@ -80,19 +116,26 @@ public class SimpleWEBServer extends Thread {
 	
 	private void route(OutputStream output, String path) throws IOException {
 		
-		routeMap.forEach((k, v) -> { 
-			if(test(k, path)) {
-				v.accept(path);
-			}
-		});
+		if(path == null) {
+			sendBadRequestResponse(output);
+		}
+		
+		try {
+			routeList.stream()
+			.filter(r -> test(r.regex, path))
+			.findFirst().get().function.sendResponse(output, path);
+		} catch(NoSuchElementException e) {
+			 sendNotFoundResponse(output);
+		}
 	}
 	
-	public static boolean test(String regex, String testString){  
+	public static boolean test(String regex, String testString) {  
         Pattern p = Pattern.compile(regex);  
         Matcher m = p.matcher(testString);  
         return m.matches(); 
     }
 
+	@SuppressWarnings("unused")
 	private void route1(OutputStream output, String path)
 			throws IOException, FileNotFoundException {
 		System.out.println("path: " + path);
@@ -108,21 +151,28 @@ public class SimpleWEBServer extends Thread {
 		}
 	}
 
-	private void sendImageResponse(OutputStream output) throws IOException,
-			FileNotFoundException {
+	private void sendImageResponse(OutputStream output) {
 		String response;
 		File file = new File("b1.gif");
 		response = this.createImageResponseHead(file);
-		output.write(response.getBytes());
-		FileInputStream fis = new FileInputStream(file);
-		int size = 1;
-		byte buf[] = new byte[64*1024]; 
-		while(size > 0)
-		{
-			size = fis.read(buf);
-		    if(size > 0) output.write(buf, 0, size);
+		try {
+			output.write(response.getBytes());
+			FileInputStream fis = new FileInputStream(file);
+			
+			int size = 1;
+			byte buf[] = new byte[64*1024];
+			
+			while(size > 0) {
+				size = fis.read(buf);
+				if(size > 0) {
+					output.write(buf, 0, size);
+				}
+			}
+			fis.close();
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
 		}
-		fis.close();
 	}
 	
 	
@@ -180,11 +230,7 @@ public class SimpleWEBServer extends Thread {
         df.setTimeZone(TimeZone.getTimeZone("GMT"));
         response = response + "Last-Modified: " + df.format(new Date(file.lastModified())) + "\n";
         response = response + "Content-Length: " + file.length() + "\n";
-
-        // строка с MIME кодировкой
         response = response + "Content-Type: " + "image/gif" + "\n";
-
-        // остальные заголовки
         response = response
         + "Connection: close\n"
         + "Server: SimpleWEBServer\n\n";
@@ -206,9 +252,14 @@ public class SimpleWEBServer extends Thread {
         return response;
 	}
 	
-	private void sendSimpleResponse(OutputStream output, String msg) throws IOException {
+	private void sendSimpleResponse(OutputStream output, String msg){
 		String response = createSimpleResponse() + msg;
-		output.write(response.getBytes());  
+		try {
+			output.write(response.getBytes());
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}  
 	}
 
 	private void sendBadRequestResponse(OutputStream output) throws IOException {
@@ -226,4 +277,23 @@ public class SimpleWEBServer extends Thread {
         output.write(response.getBytes());      
 	}
 
+	private void sendNotFoundResponse(OutputStream output) {
+		String response = "HTTP/1.1 404 Not Found\n";    
+        DateFormat df = DateFormat.getTimeInstance();
+        df.setTimeZone(TimeZone.getTimeZone("GMT"));
+        response = response 
+        		+ "Date: " 
+        		+ df.format(new Date()) 
+        		+ "\n";
+        response = response
+        		+ "Connection: close\n"
+        		+ "Server: SimpleWEBServer\n"
+        		+ "Pragma: no-cache\n\n";
+        try {
+			output.write(response.getBytes());
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}      
+	}
 }
