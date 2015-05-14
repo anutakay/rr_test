@@ -76,7 +76,19 @@ public class SimpleWEBServer extends Thread {
 					+ "<img src=\"http://localhost:8080/banner/3\" vspace=\"10\"/>";
 			sendSimpleResponse(out, str);
 		});
-		addRoute("^banner/[a-z0-9_-]+$", (OutputStream out, String path) -> sendImageResponse(out));
+		addRoute("^banner/([a-z0-9_-]+)$", (OutputStream out, String path) -> {
+			String filename = getImageFileNameForPath(path);
+			if(filename == null) {
+				sendNotFoundResponse(out);
+			} else {
+				sendImageResponse(out, filename);
+			}
+		});
+	}
+	
+	private String getImageFileNameForPath(String path) {
+		String id = getId("^banner/([a-z0-9_-]+)$", path);
+		return bannerMap.get(id);
 	}
 
 	private void addRoute(final String regex, final WorkerInterface function) {		
@@ -134,6 +146,15 @@ public class SimpleWEBServer extends Thread {
         Matcher m = p.matcher(testString);  
         return m.matches(); 
     }
+	
+	public static String getId(String regex, String testString) {
+		Pattern p = Pattern.compile(regex);  
+        Matcher m = p.matcher(testString);  
+        if( m.find()) {
+        	return m.group(1);
+        }
+        return null; 
+	}
 
 	@SuppressWarnings("unused")
 	private void route1(OutputStream output, String path)
@@ -147,13 +168,13 @@ public class SimpleWEBServer extends Thread {
 					+ "<img src=\"http://localhost:8080/banner/3\" vspace=\"10\"/>";
 			sendSimpleResponse(output, str);
 		} else {
-			sendImageResponse(output);
+			sendImageResponse(output, "b1.gif");
 		}
 	}
 
-	private void sendImageResponse(OutputStream output) {
+	private void sendImageResponse(OutputStream output, String filename) {
 		String response;
-		File file = new File("b1.gif");
+		File file = new File(filename);
 		response = this.createImageResponseHead(file);
 		try {
 			output.write(response.getBytes());
