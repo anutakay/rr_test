@@ -23,8 +23,10 @@ import java.util.regex.Pattern;
 public class SimpleWEBServer extends Thread {
 	
 	private static Map<String, String> bannerMap = new HashMap<String,String>();
+	private static Map<String, Integer> counterMap;
 	
 	private List<Route> routeList = new ArrayList<Route>();
+	
 	
 	@FunctionalInterface
 	public interface WorkerInterface {
@@ -45,6 +47,8 @@ public class SimpleWEBServer extends Thread {
 	
 	public static void main(final String... args) {
 		
+		createCounters();
+		
 		ServerSocket server;
 		try {
 			server = new ServerSocket(PORT, 0, InetAddress.getByName("localhost"));
@@ -61,7 +65,6 @@ public class SimpleWEBServer extends Thread {
 	
 	public SimpleWEBServer(final Socket socket) {
 		addRoutes();
-	
 		this.socket = socket;
 		setDaemon(true);
         setPriority(NORM_PRIORITY);
@@ -69,7 +72,7 @@ public class SimpleWEBServer extends Thread {
 	}
 
 	private void addRoutes() {
-		addRoute("^stats$", (OutputStream out, String path) -> sendSimpleResponse(out, "Вывод статистики"));
+		addRoute("^stats$", (OutputStream out, String path) -> sendStatsResponse(out));
 		addRoute("^main$", (OutputStream out, String path) -> {
 			String str = "<img src=\"http://localhost:8080/banner/1\" vspace=\"10\"/>"
 					+ "<img src=\"http://localhost:8080/banner/2\" vspace=\"10\"/>"
@@ -77,17 +80,29 @@ public class SimpleWEBServer extends Thread {
 			sendSimpleResponse(out, str);
 		});
 		addRoute("^banner/([a-z0-9_-]+)$", (OutputStream out, String path) -> {
-			String filename = getImageFileNameForPath(path);
+			String id = getIdForPath(path);
+			String filename = getImageFileNameForId(id);
 			if(filename == null) {
 				sendNotFoundResponse(out);
 			} else {
+				counterMap.replace(id, counterMap.get(id) + 1);
 				sendImageResponse(out, filename);
 			}
 		});
 	}
 	
-	private String getImageFileNameForPath(String path) {
-		String id = getId("^banner/([a-z0-9_-]+)$", path);
+	private static void createCounters() {
+		counterMap = new HashMap<String, Integer>();
+		bannerMap.forEach((k, v) -> {
+			counterMap.put(k, 0);
+		});
+	}
+	
+	private String getIdForPath(String path) {
+		return getId("^banner/([a-z0-9_-]+)$", path);
+	}
+
+	private String getImageFileNameForId(String id) {
 		return bannerMap.get(id);
 	}
 
@@ -244,6 +259,30 @@ public class SimpleWEBServer extends Thread {
         }
         return (str.substring(s, e)).trim();
     }
+	
+	private void sendStatsResponse(OutputStream out) {
+		String response = createSimpleResponse() + "<table>";
+		response = response	+ "<tr>"
+				+ "<td>id</td>"
+				+ "<td>filename</td>"
+				+ "<td>count</td>"
+				+ "</tr>";
+		for (Map.Entry<String, String> entry : bannerMap.entrySet()) {
+			response = response	+ "<tr>"
+					+ "<td>" + entry.getKey() + "</td>"
+					+ "<td>" + entry.getValue() + "</td>"
+					+ "<td>" + counterMap.get(entry.getKey())+ "</td>"
+					+ "</tr>";
+		}
+		
+		response = response + "</table>";
+		try {
+			out.write(response.getBytes());
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}  
+	}
 	
 	private String createImageResponseHead(File file) {
         String response = "HTTP/1.1 200 OK\n";
