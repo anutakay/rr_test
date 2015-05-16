@@ -4,10 +4,67 @@ exec scala -classpath "java-server.jar" -savecompiled "$0" $@
 
 import rosrabota_test.Server
 
-object HelloWorld {
-  def main(args: Array[String]) {
-	Server.main("")
-  }
+import java.io.IOException
+import java.net.ServerSocket
+import java.net.Socket
+import java.net.InetAddress
+import java.io.InputStream
+import java.io.OutputStream
+
+class SimpleServer {
+	private var socket: Socket = null
+	
+	def this(socket: Socket) {
+		this
+		this.socket = socket
+		addRoutes
+		runThread
+	}
+
+	def addRoutes = {
+	}
+
+	def runThread = {
+		var thread: Thread = new Thread(mRunnable)
+		thread.setDaemon(true)
+    	thread.setPriority(Thread.NORM_PRIORITY)
+    	thread.start
+	}
+
+	val mRunnable: Runnable =  new Runnable {
+		def run = {
+			println("обработка")
+			try {
+				val input: InputStream = socket.getInputStream
+				val output: OutputStream = socket.getOutputStream
+				socket.close
+			} catch {
+				case e: IOException => e.printStackTrace
+			}
+		}
+	}
 }
 
-HelloWorld.main(args)
+object SimpleServer {
+	def main(args: Array[String]) {
+  	 	addBanners
+	 	Server.createCounters
+		val server: ServerSocket = new ServerSocket(8080, 0, InetAddress.getByName("localhost"))
+		println("server listen port " + 8080 + "\n")
+		try {
+			while(true)	{
+				new SimpleServer(server.accept)
+			}
+		} catch {
+			case e:IOException => println("init error: " + e)
+		}
+  	}
+  
+  	def addBanners = {
+		Server.bannerMap.put("1", "b1.gif")
+		Server.bannerMap.put("2", "b2.gif")
+		Server.bannerMap.put("3", "b3.gif")
+  	}
+}
+
+SimpleServer.main(args)

@@ -5,8 +5,6 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.net.InetAddress;
-import java.net.ServerSocket;
 import java.net.Socket;
 import java.text.DateFormat;
 import java.util.ArrayList;
@@ -48,37 +46,12 @@ public class Server {
 			this.function = function;
 		}
 	};
-
-	public static void main(final String... args) {
-		
-		addBanners();
-		createCounters();
-		
-		ServerSocket server;
-		try {
-			server = new ServerSocket(PORT, 0, InetAddress.getByName("localhost"));
-			System.out.println("server listen port " + PORT + "\n");
-
-			while(true)	{		
-				new Server(server.accept());
-			}
-        
-		} catch (IOException e) {
-			System.out.println("init error: " + e);
-		}
-	}
 	
 	public Server(final Socket socket) {
 		this.socket = socket;
 
 		addRoutes();
 		runThread();
-	}
-	
-	public static void addBanners() {
-		bannerMap.put("1", "b1.gif");
-		bannerMap.put("2", "b2.gif");
-		bannerMap.put("3", "b3.gif");	
 	}
 	
 	public static void createCounters() {
