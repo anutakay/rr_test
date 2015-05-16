@@ -2,13 +2,11 @@
 exec scala -classpath "java-server.jar" -savecompiled "$0" $@
 !#
 
-import rosrabota_test.SimpleWEBServer
-
-case class Person(name: String)
+import rosrabota_test.Server
 
 object HelloWorld {
   def main(args: Array[String]) {
-	SimpleWEBServer.main("")
+	Server.main("")
   }
 }
 
