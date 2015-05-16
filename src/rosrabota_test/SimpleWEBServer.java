@@ -25,8 +25,8 @@ public class SimpleWEBServer {
 	
 	Socket socket;
 	
-	private Map<String, String> bannerMap = new HashMap<String,String>();
-	private Map<String, Integer> counterMap = new HashMap<String, Integer>();
+	private static Map<String, String> bannerMap = new HashMap<String,String>();
+	private static Map<String, Integer> counterMap = new HashMap<String, Integer>();
 	
 	private List<Route> routeList = new ArrayList<Route>();
 	
@@ -51,6 +51,9 @@ public class SimpleWEBServer {
 
 	public static void main(final String... args) {
 		
+		addBanners();
+		createCounters();
+		
 		ServerSocket server;
 		try {
 			server = new ServerSocket(PORT, 0, InetAddress.getByName("localhost"));
@@ -67,19 +70,18 @@ public class SimpleWEBServer {
 	
 	public SimpleWEBServer(final Socket socket) {
 		this.socket = socket;
-		addBanners();
-		createCounters();
+
 		addRoutes();
 		runThread();
 	}
 	
-	private void addBanners() {
+	private static void addBanners() {
 		bannerMap.put("1", "b1.gif");
 		bannerMap.put("2", "b2.gif");
 		bannerMap.put("3", "b3.gif");	
 	}
 	
-	private void createCounters() {
+	private static void createCounters() {
 		bannerMap.forEach((k, v) -> {
 			counterMap.put(k, 0);
 		});
