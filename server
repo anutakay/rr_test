@@ -35,8 +35,13 @@ class SimpleServer {
 		def run = {
 			println("обработка")
 			try {
-				val input: InputStream = socket.getInputStream
-				val output: OutputStream = socket.getOutputStream
+				val is: InputStream = socket.getInputStream
+				val os: OutputStream = socket.getOutputStream
+				
+				val buf: Array[Byte] = new Array[Byte](64*1024)
+				val size: Int = is.read(buf)  
+				val request: String = new String(buf, 0, size)
+				
 				socket.close
 			} catch {
 				case e: IOException => e.printStackTrace
