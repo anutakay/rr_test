@@ -1,0 +1,15 @@
+#!/bin/sh
+exec scala -classpath "java-server.jar" -savecompiled "$0" $@
+!#
+
+import rosrabota_test.SimpleWEBServer
+
+case class Person(name: String)
+
+object HelloWorld {
+  def main(args: Array[String]) {
+	SimpleWEBServer.main("")
+  }
+}
+
+HelloWorld.main(args)
