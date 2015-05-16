@@ -2,7 +2,6 @@ package rosrabota_test;
 
 import java.io.File;
 import java.io.FileInputStream;
-import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -20,34 +19,37 @@ import java.util.TimeZone;
 import java.util.regex.Matcher;  
 import java.util.regex.Pattern; 
 
-public class SimpleWEBServer extends Thread {
-	
-	private static Map<String, String> bannerMap = new HashMap<String,String>();
-	private static Map<String, Integer> counterMap;
-	
-	private List<Route> routeList = new ArrayList<Route>();
-	
-	
-	@FunctionalInterface
-	public interface WorkerInterface {
-		
-	    public void sendResponse(OutputStream out, String msg);
-	 
-	}
-	
-	static {
-		bannerMap.put("1", "b1.gif");
-		bannerMap.put("2", "b2.gif");
-		bannerMap.put("3", "b3.gif");	
-	}
+public class SimpleWEBServer {
 	
 	private static int PORT = 8080;
 	
 	Socket socket;
 	
-	public static void main(final String... args) {
+	private Map<String, String> bannerMap = new HashMap<String,String>();
+	private Map<String, Integer> counterMap = new HashMap<String, Integer>();
+	
+	private List<Route> routeList = new ArrayList<Route>();
+	
+	@FunctionalInterface
+	public interface WorkerInterface {
+	
+	    public void sendResponse(OutputStream out, String msg);
+	 
+	}
+	
+	private class Route {
 		
-		createCounters();
+		String regex;
+		
+		WorkerInterface function;
+		
+		public Route(String regex, WorkerInterface function) {
+			this.regex = regex;
+			this.function = function;
+		}
+	};
+
+	public static void main(final String... args) {
 		
 		ServerSocket server;
 		try {
@@ -64,11 +66,23 @@ public class SimpleWEBServer extends Thread {
 	}
 	
 	public SimpleWEBServer(final Socket socket) {
-		addRoutes();
 		this.socket = socket;
-		setDaemon(true);
-        setPriority(NORM_PRIORITY);
-        start();
+		addBanners();
+		createCounters();
+		addRoutes();
+		runThread();
+	}
+	
+	private void addBanners() {
+		bannerMap.put("1", "b1.gif");
+		bannerMap.put("2", "b2.gif");
+		bannerMap.put("3", "b3.gif");	
+	}
+	
+	private void createCounters() {
+		bannerMap.forEach((k, v) -> {
+			counterMap.put(k, 0);
+		});
 	}
 
 	private void addRoutes() {
@@ -80,7 +94,7 @@ public class SimpleWEBServer extends Thread {
 			sendSimpleResponse(out, str);
 		});
 		addRoute("^banner/([a-z0-9_-]+)$", (OutputStream out, String path) -> {
-			String id = getIdForPath(path);
+			String id = extarctValueFromString("^banner/([a-z0-9_-]+)$", 1, path);
 			String filename = getImageFileNameForId(id);
 			if(filename == null) {
 				sendNotFoundResponse(out);
@@ -89,17 +103,6 @@ public class SimpleWEBServer extends Thread {
 				sendImageResponse(out, filename);
 			}
 		});
-	}
-	
-	private static void createCounters() {
-		counterMap = new HashMap<String, Integer>();
-		bannerMap.forEach((k, v) -> {
-			counterMap.put(k, 0);
-		});
-	}
-	
-	private String getIdForPath(String path) {
-		return getId("^banner/([a-z0-9_-]+)$", path);
 	}
 
 	private String getImageFileNameForId(String id) {
@@ -110,36 +113,32 @@ public class SimpleWEBServer extends Thread {
 		routeList.add(new Route(regex, function));
 	}
 	
-	private class Route {
-		
-		String regex;
-		
-		WorkerInterface function;
-		
-		public Route(String regex, WorkerInterface function) {
-			this.regex = regex;
-			this.function = function;
+	public void runThread() {	
+		Thread thread = new Thread(runnable);
+		thread.setDaemon(true);
+        thread.setPriority(Thread.NORM_PRIORITY);
+        thread.start();
+	}
+
+	private Runnable runnable = new Runnable() {
+		public void run() {
+			try { 
+				InputStream input = socket.getInputStream();
+				OutputStream output = socket.getOutputStream();
+			
+				byte buf[] = new byte[64*1024];
+				int size = input.read(buf);  
+				String request = new String(buf, 0, size);
+				String path = getPath(request);
+                                
+				route(output, path);
+				socket.close(); 
+			} catch (IOException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
 		}
 	};
-
-	public void run() {
-		try { 
-			InputStream input = socket.getInputStream();
-			OutputStream output = socket.getOutputStream();
-			
-			byte buf[] = new byte[64*1024];
-            int size = input.read(buf);  
-            String request = new String(buf, 0, size);
-            String path = getPath(request);
-                                
-            route(output, path);
-    		socket.close(); 
-    		
-		} catch (IOException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		}
-	}
 	
 	private void route(OutputStream output, String path) throws IOException {
 		
@@ -162,29 +161,13 @@ public class SimpleWEBServer extends Thread {
         return m.matches(); 
     }
 	
-	public static String getId(String regex, String testString) {
+	public static String extarctValueFromString(String regex, int group, String str) {
 		Pattern p = Pattern.compile(regex);  
-        Matcher m = p.matcher(testString);  
+        Matcher m = p.matcher(str);  
         if( m.find()) {
-        	return m.group(1);
+        	return m.group(group);
         }
         return null; 
-	}
-
-	@SuppressWarnings("unused")
-	private void route1(OutputStream output, String path)
-			throws IOException, FileNotFoundException {
-		System.out.println("path: " + path);
-		if(path == null) {
-			sendBadRequestResponse(output);
-		} else if (path.equals("")) {
-			String str = "<img src=\"http://localhost:8080/banner/1\" vspace=\"10\"/>"
-					+ "<img src=\"http://localhost:8080/banner/2\" vspace=\"10\"/>"
-					+ "<img src=\"http://localhost:8080/banner/3\" vspace=\"10\"/>";
-			sendSimpleResponse(output, str);
-		} else {
-			sendImageResponse(output, "b1.gif");
-		}
 	}
 
 	private void sendImageResponse(OutputStream output, String filename) {
@@ -211,13 +194,8 @@ public class SimpleWEBServer extends Thread {
 		}
 	}
 	
-	
-	
 	private String getPath(final String request) {
 		String path, URI = extract(request, "GET ", " ");
-        /*if(URI == null) {
-        	URI = extract(request, "POST ", " ");
-        }*/
         if(URI == null) {
         	return null;
         }
