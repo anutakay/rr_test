@@ -18,6 +18,10 @@ import java.util.TimeZone;
 class SimpleServer {
 	private var socket: Socket = null
 	
+	val HTTP_STATUS_200_OK = "HTTP/1.1 200 OK\n"
+	val HTTP_STATUS_400_BAD_REQUEST = "HTTP/1.1 400 Bad Request\n"
+	val HTTP_STATUS_404_NOT_FOUND = "HTTP/1.1 404 Not Found\n" 
+	
 	def this(socket: Socket) {
 		this
 		this.socket = socket
@@ -46,30 +50,6 @@ class SimpleServer {
 			} catch {
 				case e: IOException => e.printStackTrace
 			}
-		}
-	}
-	
-	def route(os: OutputStream, path: String) = {
-		val main = "^main$".r
-		val stats = "^stats$".r
-		val banner = "^banner/([a-z0-9_-]+)$".r
-		path match {
-			case main(_*) => { 
-				var str = "<img src=\"http://localhost:8080/banner/1\" vspace=\"10\"/>"
-			 	str = str + "<img src=\"http://localhost:8080/banner/2\" vspace=\"10\"/>"
-				str = str + "<img src=\"http://localhost:8080/banner/3\" vspace=\"10\"/>"
-				sendSimpleResponse(os, str)
-			} 
-			case stats(_*) => sendStatsResponse(os)
-			case banner(id) => { 
-				try {
-					sendImageResponse(os, SimpleServer.banners(id))
-					SimpleServer.counters(id) = SimpleServer.counters(id)+1
-				} catch {
-					case e: NoSuchElementException => sendNotFoundResponse(os)
-				}
-			 }
-			case _ => sendNotFoundResponse(os) 
 		}
 	}
 	
@@ -105,6 +85,92 @@ class SimpleServer {
         (string.substring(s, e)).trim
 	}
 	
+	def route(os: OutputStream, path: String) = {
+		val main = "^main$".r
+		val stats = "^stats$".r
+		val banner = "^banner/([a-z0-9_-]+)$".r
+		path match {
+			case main(_*) => sendMainResponse(os)
+			case stats(_*) => sendStatsResponse(os)
+			case banner(id) => sendBannerResponse(os, id)
+			case _ => sendNotFoundResponse(os)
+		}
+	}
+	
+	def sendBannerResponse(os: OutputStream, id: String) = { 
+		try {
+			sendImageResponse(os, SimpleServer.banners(id))
+			SimpleServer.counters(id) = SimpleServer.counters(id) + 1
+		} catch {
+			case e: NoSuchElementException => sendSimpleResponse(os, HTTP_STATUS_404_NOT_FOUND, "")
+		}
+	}
+	
+	def sendMainResponse(os: OutputStream) = { 
+		var str = "<img src=\"http://localhost:8080/banner/1\" vspace=\"10\"/>"
+		str = str + "<img src=\"http://localhost:8080/banner/2\" vspace=\"10\"/>"
+		str = str + "<img src=\"http://localhost:8080/banner/3\" vspace=\"10\"/>"
+		sendSimpleResponse(os, HTTP_STATUS_200_OK, str)
+	} 
+	
+	def sendStatsResponse(os: OutputStream) = {
+		var response = "<table>"
+		response = response	+ "<tr>"
+		response = response	+ "<td>id</td>"
+		response = response	+ "<td>filename</td>"
+		response = response	+ "<td>count</td>"
+		response = response	+ "</tr>"
+
+		for ((k,v) <- SimpleServer.banners) {
+			response = response	+ "<tr>"
+			response = response	+ "<td>" + k + "</td>"
+			response = response	+ "<td>" + v + "</td>"
+			response = response	+ "<td>" + SimpleServer.counters(k)+ "</td>"
+			response = response	+ "</tr>"
+		}	
+		response = response + "</table>";
+		sendSimpleResponse(os, HTTP_STATUS_200_OK, response) 
+	}
+	
+	def sendNotFoundResponse(os: OutputStream) = {
+		sendSimpleResponse(os, HTTP_STATUS_404_NOT_FOUND, "") 
+	}
+	
+	def createSimpleResponseHead(code: String) = {
+		var response = code
+		var df = DateFormat.getTimeInstance
+        df.setTimeZone(TimeZone.getTimeZone("GMT")) 
+        response = response + "Date: " 
+        response = response + df.format(new Date) 
+        response = response + "\n"
+        response = response
+        response = response + "Connection: close\n"
+        response = response + "Server: SimpleWEBServer\n"
+        response = response + "Pragma: no-cache\n\n"
+        response
+	}
+	
+	def sendSimpleResponse(output: OutputStream, status:String, msg: String) = {
+		var response = createSimpleResponseHead(status) + msg
+		try {
+			output.write(response.getBytes)
+		} catch {
+			case e: IOException => e.printStackTrace
+		}  
+	}
+	
+	def createImageResponseHead(file: File): String = {
+        var response = HTTP_STATUS_200_OK
+        var df: DateFormat = DateFormat.getTimeInstance
+        df.setTimeZone(TimeZone.getTimeZone("GMT"))
+        response = response + "Last-Modified: " + df.format(new Date(file.lastModified)) + "\n"
+        response = response + "Content-Length: " + file.length + "\n"
+        response = response + "Content-Type: " + "image/gif" + "\n"
+        response = response + "Connection: close\n"
+        response = response + "Server: SimpleWEBServer\n\n"
+        response
+	}
+	
 	def sendImageResponse(output: OutputStream, filename: String) = {
 		
 		val file = new File(filename);
@@ -126,99 +192,6 @@ class SimpleServer {
 		} catch {
 			case e: IOException => e.printStackTrace
 		}
-	}
-	
-	def sendStatsResponse(out: OutputStream) = {
-		var response: String = createSimpleResponse + "<table>"
-		response = response	+ "<tr>"
-		response = response		+ "<td>id</td>"
-		response = response		+ "<td>filename</td>"
-		response = response		+ "<td>count</td>"
-		response = response		+ "</tr>";
-
-		for ((k,v) <- SimpleServer.banners) {
-			response = response	+ "<tr>"
-			response = response	+ "<td>" + k + "</td>"
-			response = response	+ "<td>" + v + "</td>"
-			response = response	+ "<td>" + SimpleServer.counters(k)+ "</td>"
-			response = response	+ "</tr>"
-		}
-		
-		response = response + "</table>";
-		try {
-			out.write(response.getBytes);
-		} catch {
-			case e: IOException => e.printStackTrace;
-		}  
-	}
-	
-	def createImageResponseHead(file: File): String = {
-        var response = "HTTP/1.1 200 OK\n"
-        var df: DateFormat = DateFormat.getTimeInstance
-        df.setTimeZone(TimeZone.getTimeZone("GMT"))
-        response = response + "Last-Modified: " + df.format(new Date(file.lastModified)) + "\n"
-        response = response + "Content-Length: " + file.length + "\n"
-        response = response + "Content-Type: " + "image/gif" + "\n"
-        response = response + "Connection: close\n"
-        response = response + "Server: SimpleWEBServer\n\n"
-        response
-	}
-	
-	def createSimpleResponse = {
-		var response = "HTTP/1.1 200 OK\n"
-		var df = DateFormat.getTimeInstance
-        df.setTimeZone(TimeZone.getTimeZone("GMT")) 
-        response = response 		+ "Date: " 
-        response = response 		+ df.format(new Date) 
-        response = response 		+ "\n"
-        response = response
-        response = response 		+ "Connection: close\n"
-        response = response 		+ "Server: SimpleWEBServer\n"
-        response = response 		+ "Pragma: no-cache\n\n"
-        response
-	}
-	
-	def sendSimpleResponse(output: OutputStream, msg: String) = {
-		var response = createSimpleResponse + msg
-		try {
-			output.write(response.getBytes)
-		} catch {
-			case e: IOException => e.printStackTrace
-		}  
-	}
-
-	def sendBadRequestResponse(output: OutputStream) = {
-		var response = "HTTP/1.1 400 Bad Request\n"    
-        var df = DateFormat.getTimeInstance
-        df.setTimeZone(TimeZone.getTimeZone("GMT"))
-        response = response 
-        response = response 		+ "Date: " 
-        response = response 		+ df.format(new Date) 
-        response = response 		+ "\n"
-        response = response
-        response = response 		+ "Connection: close\n"
-        response = response 		+ "Server: SimpleWEBServer\n"
-        response = response 		+ "Pragma: no-cache\n\n";
-        output.write(response.getBytes)      
-	}
-
-	def sendNotFoundResponse(output: OutputStream) = {
-		var response = "HTTP/1.1 404 Not Found\n"    
-        var df = DateFormat.getTimeInstance
-        df.setTimeZone(TimeZone.getTimeZone("GMT"));
-        response = response 
-        response = response 		+ "Date: " 
-        response = response 		+ df.format(new Date) 
-        response = response 		+ "\n"
-        response = response
-        response = response 		+ "Connection: close\n"
-        response = response 		+ "Server: SimpleWEBServer\n"
-        response = response 		+ "Pragma: no-cache\n\n"
-        try {
-			output.write(response.getBytes)
-		} catch {
-			case e: IOException => e.printStackTrace
-		}      
 	}
 }
 
