@@ -6,10 +6,11 @@ import rosrabota_test.Server
 
 import java.io.File;
 import java.io.IOException
+import java.io.OutputStream
+import java.io.FileInputStream
 import java.net.ServerSocket
 import java.net.Socket
 import java.net.InetAddress
-import java.io.OutputStream
 import java.text.DateFormat
 import java.util.Date;
 import java.util.TimeZone;
@@ -53,9 +54,21 @@ class SimpleServer {
 		val stats = "^stats$".r
 		val banner = "^banner/([a-z0-9_-]+)$".r
 		path match {
-			case main(_*) => sendSimpleResponse(os, "main") 
-			case stats(_*) => sendSimpleResponse(os, "stats")
-			case banner(id) => { sendSimpleResponse(os, "banner " + id) }
+			case main(_*) => { 
+				var str = "<img src=\"http://localhost:8080/banner/1\" vspace=\"10\"/>"
+			 	str = str + "<img src=\"http://localhost:8080/banner/2\" vspace=\"10\"/>"
+				str = str + "<img src=\"http://localhost:8080/banner/3\" vspace=\"10\"/>"
+				sendSimpleResponse(os, str)
+			} 
+			case stats(_*) => sendStatsResponse(os)
+			case banner(id) => { 
+				try {
+					sendImageResponse(os, SimpleServer.banners(id))
+					SimpleServer.counters(id) = SimpleServer.counters(id)+1
+				} catch {
+					case e: NoSuchElementException => sendNotFoundResponse(os)
+				}
+			 }
 			case _ => sendNotFoundResponse(os) 
 		}
 	}
@@ -92,6 +105,29 @@ class SimpleServer {
         (string.substring(s, e)).trim
 	}
 	
+	def sendImageResponse(output: OutputStream, filename: String) = {
+		
+		val file = new File(filename);
+		val response: String = this.createImageResponseHead(file)
+		try {
+			output.write(response.getBytes)
+			val fis = new FileInputStream(file)
+			
+			var size = 1
+			val buf = new Array[Byte](64*1024)
+			
+			while(size > 0) {
+				size = fis.read(buf)
+				if(size > 0) {
+					output.write(buf, 0, size)
+				}
+			}
+			fis.close()
+		} catch {
+			case e: IOException => e.printStackTrace
+		}
+	}
+	
 	def sendStatsResponse(out: OutputStream) = {
 		var response: String = createSimpleResponse + "<table>"
 		response = response	+ "<tr>"
@@ -99,13 +135,14 @@ class SimpleServer {
 		response = response		+ "<td>filename</td>"
 		response = response		+ "<td>count</td>"
 		response = response		+ "</tr>";
-		/*for (Map.Entry<String, String> entry : bannerMap.entrySet) {
+
+		for ((k,v) <- SimpleServer.banners) {
 			response = response	+ "<tr>"
-					+ "<td>" + entry.getKey + "</td>"
-					+ "<td>" + entry.getValue + "</td>"
-					+ "<td>" + counterMap.get(entry.getKey)+ "</td>"
-					+ "</tr>";
-		}*/
+			response = response	+ "<td>" + k + "</td>"
+			response = response	+ "<td>" + v + "</td>"
+			response = response	+ "<td>" + SimpleServer.counters(k)+ "</td>"
+			response = response	+ "</tr>"
+		}
 		
 		response = response + "</table>";
 		try {
@@ -115,7 +152,7 @@ class SimpleServer {
 		}  
 	}
 	
-	def createImageResponseHead(file: File) {
+	def createImageResponseHead(file: File): String = {
         var response = "HTTP/1.1 200 OK\n"
         var df: DateFormat = DateFormat.getTimeInstance
         df.setTimeZone(TimeZone.getTimeZone("GMT"))
@@ -190,7 +227,12 @@ object SimpleServer {
 	val banners = Map(
   	 	"1" -> "b1.gif",
   	 	"2" -> "b2.gif",
-  	 	"3" -> "b3.gif")
+  	 	"3" -> "b3.gif" )
+  	
+  	val counters = scala.collection.mutable.HashMap(
+		"1" -> 0,
+		"2" -> 0,
+		"3" -> 0 ) 
 
 	def main(args: Array[String]) {
   	 	
@@ -203,7 +245,6 @@ object SimpleServer {
 			case e: IOException => println("init error: " + e)
 		}
   	}
- 
 }
 
 SimpleServer.main(args)
