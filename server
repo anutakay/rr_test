@@ -1,8 +1,6 @@
 #!/bin/sh
-exec scala -classpath "java-server.jar" -savecompiled "$0" $@
+exec scala -savecompiled "$0" $@
 !#
-
-import rosrabota_test.Server
 
 import java.io.File;
 import java.io.IOException
@@ -107,28 +105,29 @@ class SimpleServer {
 	}
 	
 	def sendMainResponse(os: OutputStream) = { 
-		var str = "<img src=\"http://localhost:8080/banner/1\" vspace=\"10\"/>"
-		str = str + "<img src=\"http://localhost:8080/banner/2\" vspace=\"10\"/>"
-		str = str + "<img src=\"http://localhost:8080/banner/3\" vspace=\"10\"/>"
+		var str = "<img src=\"http://localhost:8080/banner/1\" vspace=\"10\"/>" +
+		"<img src=\"http://localhost:8080/banner/2\" vspace=\"10\"/>" +
+		"<img src=\"http://localhost:8080/banner/3\" vspace=\"10\"/>"
 		sendSimpleResponse(os, HTTP_STATUS_200_OK, str)
 	} 
 	
 	def sendStatsResponse(os: OutputStream) = {
-		var response = "<table>"
-		response = response	+ "<tr>"
-		response = response	+ "<td>id</td>"
-		response = response	+ "<td>filename</td>"
-		response = response	+ "<td>count</td>"
-		response = response	+ "</tr>"
+		var response = "<table>" +
+		"<tr>" +
+		"<td>id</td>" +
+		"<td>filename</td>" +
+		"<td>count</td>" +
+		"</tr>"
 
 		for ((k,v) <- SimpleServer.banners) {
-			response = response	+ "<tr>"
-			response = response	+ "<td>" + k + "</td>"
-			response = response	+ "<td>" + v + "</td>"
-			response = response	+ "<td>" + SimpleServer.counters(k)+ "</td>"
-			response = response	+ "</tr>"
+			response = response	+ 
+			"<tr>" + 
+			"<td>" + k + "</td>" +
+			"<td>" + v + "</td>" +
+			"<td>" + SimpleServer.counters(k)+ "</td>" +
+			"</tr>"
 		}	
-		response = response + "</table>";
+		response = response + "</table>"
 		sendSimpleResponse(os, HTTP_STATUS_200_OK, response) 
 	}
 	
@@ -137,17 +136,13 @@ class SimpleServer {
 	}
 	
 	def createSimpleResponseHead(code: String) = {
-		var response = code
 		var df = DateFormat.getTimeInstance
         df.setTimeZone(TimeZone.getTimeZone("GMT")) 
-        response = response + "Date: " 
-        response = response + df.format(new Date) 
-        response = response + "\n"
-        response = response
-        response = response + "Connection: close\n"
-        response = response + "Server: SimpleWEBServer\n"
-        response = response + "Pragma: no-cache\n\n"
-        response
+        code + 
+        "Date: " + df.format(new Date) + "\n" +
+        "Connection: close\n" +
+        "Server: SimpleWEBServer\n" +
+        "Pragma: no-cache\n\n" 
 	}
 	
 	def sendSimpleResponse(output: OutputStream, status:String, msg: String) = {
@@ -160,19 +155,17 @@ class SimpleServer {
 	}
 	
 	def createImageResponseHead(file: File): String = {
-        var response = HTTP_STATUS_200_OK
         var df: DateFormat = DateFormat.getTimeInstance
         df.setTimeZone(TimeZone.getTimeZone("GMT"))
-        response = response + "Last-Modified: " + df.format(new Date(file.lastModified)) + "\n"
-        response = response + "Content-Length: " + file.length + "\n"
-        response = response + "Content-Type: " + "image/gif" + "\n"
-        response = response + "Connection: close\n"
-        response = response + "Server: SimpleWEBServer\n\n"
-        response
+        HTTP_STATUS_200_OK + 
+        "Last-Modified: " + df.format(new Date(file.lastModified)) + "\n" +
+        "Content-Length: " + file.length + "\n" +
+        "Content-Type: " + "image/gif" + "\n" +
+        "Connection: close\n" +
+        "Server: SimpleWEBServer\n\n"
 	}
 	
-	def sendImageResponse(output: OutputStream, filename: String) = {
-		
+	def sendImageResponse(output: OutputStream, filename: String) = {	
 		val file = new File(filename);
 		val response: String = this.createImageResponseHead(file)
 		try {
@@ -208,8 +201,6 @@ object SimpleServer {
 		"3" -> 0 ) 
 
 	def main(args: Array[String]) {
-  	 	
-	 	Server.createCounters
 		val server = new ServerSocket(8080, 0, InetAddress.getByName("localhost"))
 		println("server listen port " + 8080 + "\n")
 		try {
