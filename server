@@ -20,11 +20,7 @@ class SimpleServer {
 	def this(socket: Socket) {
 		this
 		this.socket = socket
-		addRoutes
 		runThread
-	}
-
-	def addRoutes = {
 	}
 
 	def runThread = {
@@ -41,7 +37,9 @@ class SimpleServer {
 				val size = socket.getInputStream.read(buf)  
 				val request = new String(buf, 0, size) 
 				
-				route(socket, getPath(request))
+				val os = socket.getOutputStream
+				
+				route(os, getPath(request))
 				
 				socket.close
 			} catch {
@@ -50,9 +48,16 @@ class SimpleServer {
 		}
 	}
 	
-	def route(s: Socket, path: String) = {
-		val os = s.getOutputStream
-		sendSimpleResponse(os, path)
+	def route(os: OutputStream, path: String) = {
+		val main = "^main$".r
+		val stats = "^stats$".r
+		val banner = "^banner/([a-z0-9_-]+)$".r
+		path match {
+			case main(_*) => sendSimpleResponse(os, "main") 
+			case stats(_*) => sendSimpleResponse(os, "stats")
+			case banner(id) => { sendSimpleResponse(os, "banner " + id) }
+			case _ => sendNotFoundResponse(os) 
+		}
 	}
 	
 	def getPath(request: String) = {
@@ -181,8 +186,14 @@ class SimpleServer {
 }
 
 object SimpleServer {
+
+	val banners = Map(
+  	 	"1" -> "b1.gif",
+  	 	"2" -> "b2.gif",
+  	 	"3" -> "b3.gif")
+
 	def main(args: Array[String]) {
-  	 	addBanners
+  	 	
 	 	Server.createCounters
 		val server = new ServerSocket(8080, 0, InetAddress.getByName("localhost"))
 		println("server listen port " + 8080 + "\n")
@@ -192,12 +203,7 @@ object SimpleServer {
 			case e: IOException => println("init error: " + e)
 		}
   	}
-  
-  	def addBanners = {
-		Server.bannerMap.put("1", "b1.gif")
-		Server.bannerMap.put("2", "b2.gif")
-		Server.bannerMap.put("3", "b3.gif")
-  	}
+ 
 }
 
 SimpleServer.main(args)
