@@ -2,14 +2,208 @@
 exec scala -classpath "java-server.jar" -savecompiled "$0" $@
 !#
 
-import rosrabota_test.SimpleWEBServer
+import rosrabota_test.Server
 
-case class Person(name: String)
+import java.io.File;
+import java.io.IOException
+import java.net.ServerSocket
+import java.net.Socket
+import java.net.InetAddress
+import java.io.OutputStream
+import java.text.DateFormat
+import java.util.Date;
+import java.util.TimeZone;
 
-object HelloWorld {
-  def main(args: Array[String]) {
-	SimpleWEBServer.main("")
-  }
+class SimpleServer {
+	private var socket: Socket = null
+	
+	def this(socket: Socket) {
+		this
+		this.socket = socket
+		runThread
+	}
+
+	def runThread = {
+		val thread = new Thread(mRunnable)
+		thread.setDaemon(true)
+    	thread.setPriority(Thread.NORM_PRIORITY)
+    	thread.start
+	}
+
+	val mRunnable: Runnable =  new Runnable {
+		def run = {
+			try { 
+				val buf = new Array[Byte](64*1024)
+				val size = socket.getInputStream.read(buf)  
+				val request = new String(buf, 0, size) 
+				
+				val os = socket.getOutputStream
+				
+				route(os, getPath(request))
+				
+				socket.close
+			} catch {
+				case e: IOException => e.printStackTrace
+			}
+		}
+	}
+	
+	def route(os: OutputStream, path: String) = {
+		val main = "^main$".r
+		val stats = "^stats$".r
+		val banner = "^banner/([a-z0-9_-]+)$".r
+		path match {
+			case main(_*) => sendSimpleResponse(os, "main") 
+			case stats(_*) => sendSimpleResponse(os, "stats")
+			case banner(id) => { sendSimpleResponse(os, "banner " + id) }
+			case _ => sendNotFoundResponse(os) 
+		}
+	}
+	
+	def getPath(request: String) = {
+		var URI: String = extract(request, "GET ", " ")
+		if(URI == null) { null }
+		val path: String  = URI.toLowerCase
+		if(path.indexOf("http://", 0) == 0) {
+            URI = URI.substring(7)
+            URI = URI.substring(URI.indexOf("/", 0))
+        } else if(path.indexOf("/", 0) == 0) {
+            URI = URI.substring(1);
+        }
+
+        var i: Int = 0
+        i = URI.indexOf("?")
+        if(i > 0) { URI = URI.substring(0, i) }
+        i = URI.indexOf("#")
+        if(i > 0) { URI = URI.substring(0, i) }
+		URI
+	} 
+	
+	def extract(str: String, start: String, end: String) = {
+		var e: Int = 0 
+		var s: Int = str.indexOf("\n\n", 0)  
+		var string: String = str
+		if(s < 0) { s = string.indexOf("\r\n\r\n", 0) }
+        if(s > 0) {	string = string.substring(0, s) }
+        s = string.indexOf(start, 0) + start.length
+        if(s < start.length) { null }
+        e = string.indexOf(end, s)
+        if(e < 0) { e = string.length }
+        (string.substring(s, e)).trim
+	}
+	
+	def sendStatsResponse(out: OutputStream) = {
+		var response: String = createSimpleResponse + "<table>"
+		response = response	+ "<tr>"
+		response = response		+ "<td>id</td>"
+		response = response		+ "<td>filename</td>"
+		response = response		+ "<td>count</td>"
+		response = response		+ "</tr>";
+		/*for (Map.Entry<String, String> entry : bannerMap.entrySet) {
+			response = response	+ "<tr>"
+					+ "<td>" + entry.getKey + "</td>"
+					+ "<td>" + entry.getValue + "</td>"
+					+ "<td>" + counterMap.get(entry.getKey)+ "</td>"
+					+ "</tr>";
+		}*/
+		
+		response = response + "</table>";
+		try {
+			out.write(response.getBytes);
+		} catch {
+			case e: IOException => e.printStackTrace;
+		}  
+	}
+	
+	def createImageResponseHead(file: File) {
+        var response = "HTTP/1.1 200 OK\n"
+        var df: DateFormat = DateFormat.getTimeInstance
+        df.setTimeZone(TimeZone.getTimeZone("GMT"))
+        response = response + "Last-Modified: " + df.format(new Date(file.lastModified)) + "\n"
+        response = response + "Content-Length: " + file.length + "\n"
+        response = response + "Content-Type: " + "image/gif" + "\n"
+        response = response + "Connection: close\n"
+        response = response + "Server: SimpleWEBServer\n\n"
+        response
+	}
+	
+	def createSimpleResponse = {
+		var response = "HTTP/1.1 200 OK\n"
+		var df = DateFormat.getTimeInstance
+        df.setTimeZone(TimeZone.getTimeZone("GMT")) 
+        response = response 		+ "Date: " 
+        response = response 		+ df.format(new Date) 
+        response = response 		+ "\n"
+        response = response
+        response = response 		+ "Connection: close\n"
+        response = response 		+ "Server: SimpleWEBServer\n"
+        response = response 		+ "Pragma: no-cache\n\n"
+        response
+	}
+	
+	def sendSimpleResponse(output: OutputStream, msg: String) = {
+		var response = createSimpleResponse + msg
+		try {
+			output.write(response.getBytes)
+		} catch {
+			case e: IOException => e.printStackTrace
+		}  
+	}
+
+	def sendBadRequestResponse(output: OutputStream) = {
+		var response = "HTTP/1.1 400 Bad Request\n"    
+        var df = DateFormat.getTimeInstance
+        df.setTimeZone(TimeZone.getTimeZone("GMT"))
+        response = response 
+        response = response 		+ "Date: " 
+        response = response 		+ df.format(new Date) 
+        response = response 		+ "\n"
+        response = response
+        response = response 		+ "Connection: close\n"
+        response = response 		+ "Server: SimpleWEBServer\n"
+        response = response 		+ "Pragma: no-cache\n\n";
+        output.write(response.getBytes)      
+	}
+
+	def sendNotFoundResponse(output: OutputStream) = {
+		var response = "HTTP/1.1 404 Not Found\n"    
+        var df = DateFormat.getTimeInstance
+        df.setTimeZone(TimeZone.getTimeZone("GMT"));
+        response = response 
+        response = response 		+ "Date: " 
+        response = response 		+ df.format(new Date) 
+        response = response 		+ "\n"
+        response = response
+        response = response 		+ "Connection: close\n"
+        response = response 		+ "Server: SimpleWEBServer\n"
+        response = response 		+ "Pragma: no-cache\n\n"
+        try {
+			output.write(response.getBytes)
+		} catch {
+			case e: IOException => e.printStackTrace
+		}      
+	}
 }
 
-HelloWorld.main(args)
+object SimpleServer {
+
+	val banners = Map(
+  	 	"1" -> "b1.gif",
+  	 	"2" -> "b2.gif",
+  	 	"3" -> "b3.gif")
+
+	def main(args: Array[String]) {
+  	 	
+	 	Server.createCounters
+		val server = new ServerSocket(8080, 0, InetAddress.getByName("localhost"))
+		println("server listen port " + 8080 + "\n")
+		try {
+			while(true)	{ new SimpleServer(server.accept) }
+		} catch {
+			case e: IOException => println("init error: " + e)
+		}
+  	}
+ 
+}
+
+SimpleServer.main(args)

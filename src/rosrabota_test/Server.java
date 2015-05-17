@@ -5,8 +5,6 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.net.InetAddress;
-import java.net.ServerSocket;
 import java.net.Socket;
 import java.text.DateFormat;
 import java.util.ArrayList;
@@ -21,14 +19,14 @@ import java.util.regex.Pattern;
 
 public class Server {
 	
-	private static int PORT = 8080;
+	public static int PORT = 8080;
 	
-	Socket socket;
+	public Socket socket;
 	
-	private static Map<String, String> bannerMap = new HashMap<String,String>();
-	private static Map<String, Integer> counterMap = new HashMap<String, Integer>();
+	public static Map<String, String> bannerMap = new HashMap<String,String>();
+	public static Map<String, Integer> counterMap = new HashMap<String, Integer>();
 	
-	private List<Route> routeList = new ArrayList<Route>();
+	public List<Route> routeList = new ArrayList<Route>();
 	
 	@FunctionalInterface
 	public interface WorkerInterface {
@@ -37,7 +35,7 @@ public class Server {
 	 
 	}
 	
-	private class Route {
+	public class Route {
 		
 		String regex;
 		
@@ -48,25 +46,6 @@ public class Server {
 			this.function = function;
 		}
 	};
-
-	public static void main(final String... args) {
-		
-		addBanners();
-		createCounters();
-		
-		ServerSocket server;
-		try {
-			server = new ServerSocket(PORT, 0, InetAddress.getByName("localhost"));
-			System.out.println("server listen port " + PORT + "\n");
-
-			while(true)	{		
-				new Server(server.accept());
-			}
-        
-		} catch (IOException e) {
-			System.out.println("init error: " + e);
-		}
-	}
 	
 	public Server(final Socket socket) {
 		this.socket = socket;
@@ -75,19 +54,13 @@ public class Server {
 		runThread();
 	}
 	
-	private static void addBanners() {
-		bannerMap.put("1", "b1.gif");
-		bannerMap.put("2", "b2.gif");
-		bannerMap.put("3", "b3.gif");	
-	}
-	
-	private static void createCounters() {
+	public static void createCounters() {
 		bannerMap.forEach((k, v) -> {
 			counterMap.put(k, 0);
 		});
 	}
 
-	private void addRoutes() {
+	public void addRoutes() {
 		addRoute("^stats$", (OutputStream out, String path) -> sendStatsResponse(out));
 		addRoute("^main$", (OutputStream out, String path) -> {
 			String str = "<img src=\"http://localhost:8080/banner/1\" vspace=\"10\"/>"
@@ -107,11 +80,11 @@ public class Server {
 		});
 	}
 
-	private String getImageFileNameForId(String id) {
+	public String getImageFileNameForId(String id) {
 		return bannerMap.get(id);
 	}
 
-	private void addRoute(final String regex, final WorkerInterface function) {		
+	public void addRoute(final String regex, final WorkerInterface function) {		
 		routeList.add(new Route(regex, function));
 	}
 	
@@ -122,7 +95,7 @@ public class Server {
         thread.start();
 	}
 
-	private Runnable runnable = new Runnable() {
+	public Runnable runnable = new Runnable() {
 		public void run() {
 			try { 
 				InputStream input = socket.getInputStream();
@@ -142,7 +115,7 @@ public class Server {
 		}
 	};
 	
-	private void route(OutputStream output, String path) throws IOException {
+	public void route(OutputStream output, String path) throws IOException {
 		
 		if(path == null) {
 			sendBadRequestResponse(output);
@@ -172,7 +145,7 @@ public class Server {
         return null; 
 	}
 
-	private void sendImageResponse(OutputStream output, String filename) {
+	public void sendImageResponse(OutputStream output, String filename) {
 		String response;
 		File file = new File(filename);
 		response = this.createImageResponseHead(file);
@@ -196,7 +169,7 @@ public class Server {
 		}
 	}
 	
-	private String getPath(final String request) {
+	public String getPath(final String request) {
 		String path, URI = extract(request, "GET ", " ");
         if(URI == null) {
         	return null;
@@ -221,7 +194,7 @@ public class Server {
 		return URI;
 	}
 
-	protected String extract(String str, String start, String end) {
+	public String extract(String str, String start, String end) {
         int s = str.indexOf("\n\n", 0), e;
         if(s < 0) {
         	s = str.indexOf("\r\n\r\n", 0);
@@ -240,7 +213,7 @@ public class Server {
         return (str.substring(s, e)).trim();
     }
 	
-	private void sendStatsResponse(OutputStream out) {
+	public void sendStatsResponse(OutputStream out) {
 		String response = createSimpleResponse() + "<table>";
 		response = response	+ "<tr>"
 				+ "<td>id</td>"
@@ -264,7 +237,7 @@ public class Server {
 		}  
 	}
 	
-	private String createImageResponseHead(File file) {
+	public String createImageResponseHead(File file) {
         String response = "HTTP/1.1 200 OK\n";
         DateFormat df = DateFormat.getTimeInstance();
         df.setTimeZone(TimeZone.getTimeZone("GMT"));
@@ -277,7 +250,7 @@ public class Server {
         return response;
 	}
 	
-	private String createSimpleResponse() {
+	public String createSimpleResponse() {
 		String response = "HTTP/1.1 200 OK\n";
 		DateFormat df = DateFormat.getTimeInstance();
         df.setTimeZone(TimeZone.getTimeZone("GMT"));
@@ -292,7 +265,7 @@ public class Server {
         return response;
 	}
 	
-	private void sendSimpleResponse(OutputStream output, String msg){
+	public void sendSimpleResponse(OutputStream output, String msg){
 		String response = createSimpleResponse() + msg;
 		try {
 			output.write(response.getBytes());
@@ -302,7 +275,7 @@ public class Server {
 		}  
 	}
 
-	private void sendBadRequestResponse(OutputStream output) throws IOException {
+	public void sendBadRequestResponse(OutputStream output) throws IOException {
 		String response = "HTTP/1.1 400 Bad Request\n";    
         DateFormat df = DateFormat.getTimeInstance();
         df.setTimeZone(TimeZone.getTimeZone("GMT"));
@@ -317,7 +290,7 @@ public class Server {
         output.write(response.getBytes());      
 	}
 
-	private void sendNotFoundResponse(OutputStream output) {
+	public void sendNotFoundResponse(OutputStream output) {
 		String response = "HTTP/1.1 404 Not Found\n";    
         DateFormat df = DateFormat.getTimeInstance();
         df.setTimeZone(TimeZone.getTimeZone("GMT"));
